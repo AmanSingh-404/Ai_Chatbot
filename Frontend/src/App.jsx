@@ -31,7 +31,7 @@ const App = () => {
   };
 
   useEffect(() => {
-    const socketInstance = io("http://localhost:3000")
+    const socketInstance = io(import.meta.env.VITE_API_URL || "http://localhost:3000")
     socket.current = socketInstance
 
     socketInstance.on("ai-message-response", ({ response }) => {
