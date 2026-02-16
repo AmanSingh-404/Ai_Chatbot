@@ -1,55 +1,79 @@
 require("dotenv").config();
-const app = require("./src/app")
+
+const app = require("./src/app");
 const { createServer } = require("http");
 const { Server } = require("socket.io");
 const { genrateResponse } = require("./src/services/ai.services");
-const { text } = require("stream/consumers");
 
 const httpServer = createServer(app);
+
 const io = new Server(httpServer, {
   cors: {
-    origin: process.env.FRONTEND_URL || "http://localhost:5173"
+    origin: process.env.FRONTEND_URL || "*",
+    methods: ["GET", "POST"]
   }
 });
-
-const chatHistory = [
-  {
-    role: 'user',
-    parts: [{ text: 'Turn the lights down to a romantic level' }]
-  },
-  {
-    role: "model",
-    parts: [
-      {
-        text: "welcome to the smart home"
-      }
-    ]
-  }
-]
 
 io.on("connection", (socket) => {
-  console.log("A User Connected")
+  console.log("✅ User connected:", socket.id);
 
-  socket.on("disconnect", (socket) => {
-    console.log("user Disconnected");
-  })
+  // Each user gets their own chat history
+  const chatHistory = [
+    {
+      role: "user",
+      parts: [
+        {
+          text: "You are a helpful AI chatbot. Answer questions clearly and naturally."
+        }
+      ]
+    }
+  ];
+
+  socket.on("disconnect", () => {
+    console.log("❌ User disconnected:", socket.id);
+  });
 
   socket.on("ai-message", async (data) => {
-    console.log("user-message", data);
+    try {
+      if (!data?.prompt) {
+        return socket.emit("ai-message-response", {
+          response: "Invalid message."
+        });
+      }
 
-    chatHistory.push({
-      role: "user",
-      parts: [{ text: data.prompt }]
-    })
+      console.log("📩 User:", data.prompt);
 
-    const response = await genrateResponse(chatHistory);
-    console.log("ai-response", response)
-    socket.emit("ai-message-response", { response })
-  })
+      // Add user message
+      chatHistory.push({
+        role: "user",
+        parts: [{ text: data.prompt }]
+      });
+
+      // Generate AI response
+      const response = await genrateResponse(chatHistory);
+
+      // Add AI response to history
+      chatHistory.push({
+        role: "model",
+        parts: [{ text: response }]
+      });
+
+      console.log("🤖 AI:", response);
+
+      socket.emit("ai-message-response", { response });
+
+    } catch (error) {
+      console.error("🚨 AI Error:", error);
+
+      socket.emit("ai-message-response", {
+        response: "Something went wrong. Please try again."
+      });
+    }
+  });
 });
 
-
 const PORT = process.env.PORT || 3000;
+
 httpServer.listen(PORT, () => {
-  console.log(`server running on port ${PORT}`);
-})
+  console.log(`🚀 Server running on port ${PORT}`);
+});
